@@ -1,0 +1,42 @@
+name: Clean notebooks
+
+on:
+  push:
+    branches: [ "main" ]        # 也可以加其他分支
+  pull_request:
+    branches: [ "main" ]        # PR 也会清理，避免预览报错
+
+permissions:
+  contents: write                # 允许工作流将清理后的笔记本回推
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # 需要完整历史以便回推
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install tools
+        run: |
+          pip install nbconvert nbstripout
+
+      - name: Strip notebook metadata
+        run: |
+          # 对仓库内所有 ipynb 执行一次“就地清理”
+          # ClearMetadataPreprocessor 会移除 widgets 等无关元数据
+          find . -name "*.ipynb" -print0 | xargs -0 -I{} \
+            jupyter nbconvert --to notebook --inplace "{}" --ClearMetadataPreprocessor.enabled=True
+
+      - name: Auto-commit cleaned notebooks
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-clean notebook metadata"
+          file_pattern: "*.ipynb"
